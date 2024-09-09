@@ -108,6 +108,7 @@ func (l *Lexer) Read(inst string) []*Token {
 	return res
 }
 
+// reset the parsers position
 func (l *Lexer) Zero() {
 	l.position = 0
 }

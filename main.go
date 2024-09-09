@@ -9,7 +9,6 @@ import (
 
 	"bfcc/gen"
 	"bfcc/repl"
-
 	"github.com/jessevdk/go-flags"
 )
 
@@ -87,7 +86,8 @@ func Run(args []string) error {
 }
 
 func RunRepl() error {
-	return repl.Start()
+	// return repl.Start()
+	return repl.Readline()
 }
 
 func main() {
