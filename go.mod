@@ -7,6 +7,7 @@ require (
 	github.com/charmbracelet/bubbletea v1.1.0
 	github.com/charmbracelet/lipgloss v0.13.0
 	github.com/jessevdk/go-flags v1.6.1
+	github.com/muesli/reflow v0.3.0
 	github.com/openengineer/go-repl v0.2.2
 )
 

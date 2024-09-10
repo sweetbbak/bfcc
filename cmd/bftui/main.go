@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"time"
 
@@ -39,13 +38,15 @@ const (
 )
 
 type model struct {
-	width  int
-	height int
-	scroll int
-	input  textinput.Model
-	styles *Styles
-	view   View // currently focused region
-	vm     *debug.Debug
+	width   int
+	height  int
+	scroll  int
+	input   textinput.Model
+	styles  *Styles
+	view    View // currently focused region
+	vm      *debug.Debug
+	memfmt  MemoryFormat // hex, octal, decimal memory layout
+	content string       // memory content
 }
 
 func initialModel() model {
@@ -56,19 +57,26 @@ func initialModel() model {
 	inst := []string{"+", "-", "[", "]", ">", "<", ",", "."}
 	input.SetSuggestions(inst)
 	input.ShowSuggestions = true
+	input.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
+	input.Cursor.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
 
-	input.Validate = func(s string) error {
-		for _, c := range s {
-			switch string(c) {
-			case "+", "-", "[", "]", ">", "<", ",", ".":
-			default:
-				return fmt.Errorf("invalid instruction")
-			}
-		}
-		return nil
-	}
+	m := MemoryFormat{}
+	m.kind = Decimal
+	m.literal = "%d"
 
-	vm := debug.New(100, true)
+	// input.Validate = func(s string) error {
+	// 	for _, c := range s {
+	// 		switch string(c) {
+	// 		case "+", "-", "[", "]", ">", "<", ",", ".":
+	// 		default:
+	// 			return fmt.Errorf("invalid instruction")
+	// 		}
+	// 	}
+	// 	return nil
+	// }
+
+	vm := debug.New(150, true)
+
 	vm.SetStep(func() error {
 		time.Sleep(time.Millisecond * 10)
 		return nil
@@ -79,11 +87,36 @@ func initialModel() model {
 		input:  input,
 		view:   0,
 		vm:     vm,
+		memfmt: m,
 	}
 }
 
 func (m model) Init() tea.Cmd {
-	return nil
+	return m.UpdateEval2()
+}
+
+type EvalMsg error
+
+func (m model) UpdateEval(input string) tea.Cmd {
+	return func() tea.Msg {
+		err := m.vm.Eval(input)
+		return EvalMsg(err)
+	}
+}
+
+type EvalMsgx struct {
+	content string
+	t       time.Time
+}
+
+func (m model) UpdateEval2() tea.Cmd {
+	return tea.Tick(time.Microsecond, func(t time.Time) tea.Msg {
+		obj := EvalMsgx{
+			content: m.RenderMemory(),
+			t:       t,
+		}
+		return EvalMsgx(obj)
+	})
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -92,16 +125,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+	case EvalMsgx:
+		m.content = msg.content
+		return m, m.UpdateEval2()
+	case EvalMsg:
+		if msg != nil {
+			m.input.Placeholder = msg.Error()
+		}
+		return m, m.UpdateEval2()
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
+		case "ctrl+a":
+			m.CycleMemFormat()
 		case "tab":
 		case "enter":
 			v := m.input.Value()
 			m.input.Reset()
-			// m.input.Placeholder = fmt.Sprintf("pointer %d", m.vm.Ptr())
-			m.vm.Eval(v)
+			c := tea.Batch(m.UpdateEval(v))
+			return m, c
 		case "esc", "escape":
 		}
 	}
@@ -118,8 +161,7 @@ func (m model) CycleZone() tea.Cmd {
 
 // render the memory of the repl
 func (m model) RenderMemory() string {
-	// return m.vm.DumpMemory("%2d ", uint(m.width-3))
-	return m.vm.DumpMemory(" %d ", uint(0))
+	return m.vm.DumpMemory(m.memfmt.literal, m.width/2)
 }
 
 func (m model) View() string {
@@ -133,11 +175,10 @@ func (m model) View() string {
 
 	mheight := m.height - lipgloss.Height(answer) - 2
 
-	mem := m.RenderMemory()
 	content := m.styles.TextField.
 		Width(m.width - 2).
 		Height(mheight).
-		Render(mem)
+		Render(m.content)
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,

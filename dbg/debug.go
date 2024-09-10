@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"bfcc/lexer"
+	"github.com/muesli/reflow/wordwrap"
 )
 
 type Debug struct {
@@ -84,21 +85,27 @@ func (v *Debug) PrintState() string {
 
 // dump memory as a format "%d" or "%x"
 // as well as a word wrap limit, use 0 to ignore
-func (v *Debug) DumpMemory(format string, wrap uint) string {
+func (v *Debug) DumpMemory(format string, wrap int) string {
 	var sb strings.Builder
 
 	v.rw.RLock()
 	defer v.rw.RUnlock()
 
-	for _, n := range v.Memory {
+	for i, n := range v.Memory {
 		clr, nocolor := v.c.Colorize(byte(n))
+
 		str := fmt.Sprintf(format, n)
-		sb.WriteString(fmt.Sprintf("%s%s%s", string(clr), str, string(nocolor)))
+		str2 := fmt.Sprintf("|%s%s%s", string(clr), str, string(nocolor))
+
+		if v.ptr == i {
+			str2 = fmt.Sprintf("\x1b[34m%s\x1b[0m", str2)
+		}
+
+		sb.WriteString(str2)
 	}
 
 	if wrap > 0 {
-		return WrapString(sb.String(), wrap)
-		// return sb.String()
+		return wordwrap.String(sb.String(), wrap)
 	} else {
 		return sb.String()
 	}
