@@ -1,13 +1,13 @@
-package gen
+package interp
 
 import (
 	"fmt"
 	"io"
 
-	"bfcc/lexer"
+	"bfcc/pkg/lexer"
 )
 
-type VM struct {
+type Interpreter struct {
 	// the programs tokens
 	Tokens []*lexer.Token
 	// out programs memory / tape
@@ -25,8 +25,8 @@ type VM struct {
 }
 
 // get a new interactive brainfuck Virtual Machine
-func NewVM(stacksize int) *VM {
-	vm := &VM{
+func New(stacksize int) *Interpreter {
+	vm := &Interpreter{
 		Memory: make([]int, stacksize),
 		ptr:    0,
 	}
@@ -35,7 +35,7 @@ func NewVM(stacksize int) *VM {
 }
 
 // interpret an entire brainfuck program
-func (v *VM) Generate(input string, output string) error {
+func (v *Interpreter) Generate(input string, output string) error {
 	l := lexer.New(input)
 
 	tok := l.Next()
@@ -58,10 +58,10 @@ func (v *VM) Generate(input string, output string) error {
 }
 
 // get a new interactive brainfuck repl
-func NewRepl(stacksize int) *VM {
+func NewRepl(stacksize int) *Interpreter {
 	l := lexer.Repl()
 
-	vm := &VM{
+	vm := &Interpreter{
 		Memory: make([]int, stacksize),
 		ptr:    0,
 		repl:   l,
@@ -71,14 +71,14 @@ func NewRepl(stacksize int) *VM {
 }
 
 // return the current pointer value
-func (v *VM) Ptr() int {
+func (v *Interpreter) Ptr() int {
 	return v.ptr
 }
 
 // evaluate the given instruction. for use as a REPL
 // we take instructions, tokenize them, and then modify the
 // virtual machine structure accordingly.
-func (v *VM) Eval(instruction string) error {
+func (v *Interpreter) Eval(instruction string) error {
 	if v.repl == nil {
 		return fmt.Errorf("repl has not been initialized")
 	}
@@ -99,7 +99,7 @@ func (v *VM) Eval(instruction string) error {
 }
 
 // evaluate the current instruction
-func (v *VM) evaluate() error {
+func (v *Interpreter) evaluate() error {
 	tok := v.Tokens[v.offset]
 	switch tok.Type {
 

@@ -6,15 +6,14 @@ import (
 	"os"
 	"strings"
 
-	"bfcc/gen"
-
+	"bfcc/pkg/gen/interp"
 	repl "github.com/openengineer/go-repl"
 )
 
 type Bhandler struct {
 	prompt string
 	r      *repl.Repl
-	rpl    *gen.VM
+	rpl    *interp.Interpreter
 }
 
 func (h *Bhandler) Prompt() string {
@@ -86,7 +85,7 @@ func Readline() error {
 	h.prompt = prompt
 	h.prompt = "~$ "
 
-	rpl := gen.NewRepl(100)
+	rpl := interp.NewRepl(100)
 	rpl.Output = os.Stdout
 	rpl.Input = os.Stdin
 

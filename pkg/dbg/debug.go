@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"bfcc/lexer"
+	"bfcc/pkg/lexer"
 	"github.com/muesli/reflow/wordwrap"
 )
 

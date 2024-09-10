@@ -7,8 +7,9 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"bfcc/gen"
-	"bfcc/repl"
+	"bfcc/pkg/gen/c"
+	"bfcc/pkg/gen/interp"
+	"bfcc/pkg/repl"
 	"github.com/jessevdk/go-flags"
 )
 
@@ -30,7 +31,7 @@ func init() {
 }
 
 func Interp(input string) error {
-	vm := gen.NewVM(int(opts.StackSize))
+	vm := interp.New(int(opts.StackSize))
 	vm.Input = os.Stdin
 	vm.Output = os.Stdout
 
@@ -58,7 +59,7 @@ func Run(args []string) error {
 		return Interp(string(b))
 	}
 
-	cgen := gen.New(opts.StackSize)
+	cgen := cgen.New(opts.StackSize)
 
 	err = cgen.Generate(string(b), opts.Output)
 	if err != nil {

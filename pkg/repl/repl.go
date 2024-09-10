@@ -8,11 +8,11 @@ import (
 	"os"
 	"strings"
 
-	"bfcc/gen"
+	"bfcc/pkg/gen/interp"
 )
 
 func Start() error {
-	repl := gen.NewRepl(100)
+	repl := interp.NewRepl(100)
 	const prompt = "\x1b[32m[bf]\x1b[0m \x1b[34m~ $\x1b[0m "
 
 	var outbuf bytes.Buffer

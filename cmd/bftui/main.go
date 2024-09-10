@@ -4,8 +4,7 @@ import (
 	"log"
 	"time"
 
-	debug "bfcc/dbg"
-
+	debug "bfcc/pkg/dbg"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -92,7 +91,7 @@ func initialModel() model {
 }
 
 func (m model) Init() tea.Cmd {
-	return m.UpdateEval2()
+	return m.UpdateMemory()
 }
 
 type EvalMsg error
@@ -104,18 +103,18 @@ func (m model) UpdateEval(input string) tea.Cmd {
 	}
 }
 
-type EvalMsgx struct {
+type MemoryMsg struct {
 	content string
 	t       time.Time
 }
 
-func (m model) UpdateEval2() tea.Cmd {
+func (m model) UpdateMemory() tea.Cmd {
 	return tea.Tick(time.Microsecond, func(t time.Time) tea.Msg {
-		obj := EvalMsgx{
+		obj := MemoryMsg{
 			content: m.RenderMemory(),
 			t:       t,
 		}
-		return EvalMsgx(obj)
+		return MemoryMsg(obj)
 	})
 }
 
@@ -125,14 +124,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-	case EvalMsgx:
+	case MemoryMsg:
 		m.content = msg.content
-		return m, m.UpdateEval2()
+		return m, m.UpdateMemory()
 	case EvalMsg:
 		if msg != nil {
 			m.input.Placeholder = msg.Error()
 		}
-		return m, m.UpdateEval2()
+		return m, m.UpdateMemory()
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":

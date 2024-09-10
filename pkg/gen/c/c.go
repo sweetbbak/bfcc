@@ -1,13 +1,14 @@
 // this package handles turning a brainfuck program into an output
 // that can be compiled (generally C or ASM)
-package gen
+package cgen
 
 import (
-	"bfcc/lexer"
 	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
+
+	"bfcc/pkg/lexer"
 )
 
 type Generator interface {
