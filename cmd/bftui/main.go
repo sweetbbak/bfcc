@@ -1,10 +1,16 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
+	"fmt"
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	debug "bfcc/pkg/dbg"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -15,6 +21,7 @@ type Styles struct {
 	BorderBlur  lipgloss.Color
 	TextColor   lipgloss.Color
 	TextField   lipgloss.Style
+	TextHelp    lipgloss.Style
 	Border      lipgloss.Border
 }
 
@@ -24,6 +31,7 @@ func DefaultStyles() *Styles {
 	s.BorderBlur = lipgloss.Color("240")
 	s.TextColor = lipgloss.Color("240")
 	s.TextField = lipgloss.NewStyle().BorderForeground(s.BorderColor).BorderStyle(lipgloss.RoundedBorder()).Foreground(s.TextColor)
+	s.TextHelp = lipgloss.NewStyle().Foreground(s.TextColor)
 	s.Border = lipgloss.RoundedBorder()
 	return s
 }
@@ -46,16 +54,22 @@ type model struct {
 	vm      *debug.Debug
 	memfmt  MemoryFormat // hex, octal, decimal memory layout
 	content string       // memory content
+	step    *Stepper
+	history []string
+	output  *bytes.Buffer
 }
 
 func initialModel() model {
 	styles := DefaultStyles()
+
 	input := textinput.New()
-	input.Placeholder = "brainfuck instructions"
 	input.Focus()
-	inst := []string{"+", "-", "[", "]", ">", "<", ",", "."}
+	input.Placeholder = "brainfuck"
+
+	inst := []string{"+", "-", "[", "]", ">", "<", ",", ".", "pause", "help"}
 	input.SetSuggestions(inst)
 	input.ShowSuggestions = true
+
 	input.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
 	input.Cursor.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
 
@@ -63,23 +77,38 @@ func initialModel() model {
 	m.kind = Decimal
 	m.literal = "%d"
 
-	// input.Validate = func(s string) error {
-	// 	for _, c := range s {
-	// 		switch string(c) {
-	// 		case "+", "-", "[", "]", ">", "<", ",", ".":
-	// 		default:
-	// 			return fmt.Errorf("invalid instruction")
-	// 		}
-	// 	}
-	// 	return nil
-	// }
+	input.Validate = func(s string) error {
+		for _, c := range s {
+			switch string(c) {
+			case "+", "-", "[", "]", ">", "<", ",", ".":
+			default:
+				return fmt.Errorf("invalid instruction")
+			}
+		}
+		return nil
+	}
 
 	vm := debug.New(150, true)
+
+	// emulate stdout
+	var outbuf bytes.Buffer
+	w := bufio.NewWriter(&outbuf)
+
+	// bytes.Buffer not showing up?
+	vm.Output = w
+	vm.Output = os.Stdout
+	vm.Input = os.Stdin
 
 	vm.SetStep(func() error {
 		time.Sleep(time.Millisecond * 10)
 		return nil
 	})
+
+	s := &Stepper{
+		Speed:   10,
+		Step:    make(chan bool, 1),
+		Running: true,
+	}
 
 	return model{
 		styles: styles,
@@ -87,6 +116,7 @@ func initialModel() model {
 		view:   0,
 		vm:     vm,
 		memfmt: m,
+		step:   s,
 	}
 }
 
@@ -139,8 +169,73 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+a":
 			m.CycleMemFormat()
 		case "tab":
+		case "ctrl+j":
+			m.step.ChangeSpeed(-2) // ironically this speeds things up lol
+			m.vm.SetStep(func() error {
+				time.Sleep(time.Millisecond * time.Duration(m.step.Speed))
+				return nil
+			})
+		case "ctrl+k":
+			m.step.ChangeSpeed(2)
+			m.vm.SetStep(func() error {
+				time.Sleep(time.Millisecond * time.Duration(m.step.Speed))
+				return nil
+			})
+		case "ctrl+p":
+			if m.step.Running {
+				// not working lol
+				m.step.Pause()
+				m.vm.SetStep(func() error {
+					<-m.step.Step
+					return nil
+				})
+			} else {
+				m.step.Run()
+				m.vm.SetStep(func() error {
+					time.Sleep(time.Millisecond * time.Duration(m.step.Speed))
+					return nil
+				})
+			}
+		case "ctrl+s":
+			if !m.step.Running {
+				m.step.Step <- true
+			}
 		case "enter":
 			v := m.input.Value()
+			if len(v) > len("open") && strings.HasPrefix(v, "open") {
+				files := strings.Split(v, " ")
+				var file string
+				if len(files) > 1 {
+					file = files[1]
+				} else {
+					return m, nil
+				}
+
+				s, err := m.OpenFile(file)
+				if err != nil {
+					// render error out to tui?
+					v = err.Error()
+				}
+
+				if s != "" {
+					v = s
+				} else {
+					v = "file is empty"
+				}
+
+				m.input.Reset()
+				m.input.SetValue(v)
+				c := tea.Batch(m.UpdateEval(v))
+				return m, c
+			}
+
+			// only add valid brainfuck to the history
+			m.input.Validate(v)
+			if m.input.Err == nil {
+				m.history = append(m.history, v)
+				m.input.SetSuggestions(m.history)
+			}
+
 			m.input.Reset()
 			c := tea.Batch(m.UpdateEval(v))
 			return m, c
@@ -152,6 +247,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m model) OpenFile(file string) (string, error) {
+	b, err := os.ReadFile(file)
+	if err != nil {
+		return "", err
+	}
+
+	return string(b), nil
+}
+
 // change the models focus
 func (m model) CycleZone() tea.Cmd {
 	m.view = (m.view + 1) % m.view
@@ -159,8 +263,28 @@ func (m model) CycleZone() tea.Cmd {
 }
 
 // render the memory of the repl
+func (m model) RenderStdout() string {
+	x := m.vm.PrintState()
+	y := m.output.String()
+	return fmt.Sprintf("%s\n%s", x, y)
+}
+
+// render the memory of the repl
 func (m model) RenderMemory() string {
 	return m.vm.DumpMemory(m.memfmt.literal, m.width/2)
+}
+
+func (m model) RenderStatus() string {
+	var s string
+	if m.step.Running {
+		s = fmt.Sprintf("running: speed %d |", m.step.Speed)
+	} else {
+		s += "paused"
+	}
+
+	s += " ctrl+j speed++ | ctrl+k speed--"
+
+	return m.styles.TextHelp.Render(s)
 }
 
 func (m model) View() string {
@@ -172,7 +296,10 @@ func (m model) View() string {
 		Width(m.width - 2).
 		Render(m.input.View())
 
-	mheight := m.height - lipgloss.Height(answer) - 2
+	// outbuf := m.styles.TextField.Render(m.RenderStdout())
+	outbuf := m.RenderStdout()
+	footer := m.RenderStatus()
+	mheight := m.height - lipgloss.Height(answer) - 2 - lipgloss.Height(footer) - lipgloss.Height(outbuf)
 
 	content := m.styles.TextField.
 		Width(m.width - 2).
@@ -183,6 +310,8 @@ func (m model) View() string {
 		lipgloss.Left,
 		answer,
 		content,
+		outbuf,
+		footer,
 	)
 }
 
