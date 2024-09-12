@@ -56,7 +56,8 @@ type model struct {
 	content string       // memory content
 	step    *Stepper
 	history []string
-	output  *bytes.Buffer
+	xoutput *bytes.Buffer
+	output  *bufio.Writer
 }
 
 func initialModel() model {
@@ -88,15 +89,21 @@ func initialModel() model {
 		return nil
 	}
 
-	vm := debug.New(150, true)
+	vm := debug.New(200, true)
 
 	// emulate stdout
-	var outbuf bytes.Buffer
-	w := bufio.NewWriter(&outbuf)
+	// var outbuf *bytes.Buffer
+	// outbuf := new(bytes.Buffer)
+	var outbuff strings.Builder
+	// w := bufio.NewWriter(outbuf)
+	// r := bufio.NewReader(os.Stdin)
+	// rw := bufio.NewReadWriter(r, w)
 
 	// bytes.Buffer not showing up?
-	vm.Output = w
-	vm.Output = os.Stdout
+	// vm.Output = outbuf
+	vm.Output = &outbuff
+	// vm.Output = w
+	// vm.Output = os.Stdout
 	vm.Input = os.Stdin
 
 	vm.SetStep(func() error {
@@ -121,7 +128,9 @@ func initialModel() model {
 }
 
 func (m model) Init() tea.Cmd {
-	return m.UpdateMemory()
+	cmd := tea.Batch(m.UpdateStdout(), m.UpdateMemory())
+	return cmd
+	// return m.UpdateMemory()
 }
 
 type EvalMsg error
@@ -148,6 +157,17 @@ func (m model) UpdateMemory() tea.Cmd {
 	})
 }
 
+type StdoutMsg string
+
+func (m model) UpdateStdout() tea.Cmd {
+	return tea.Tick(time.Microsecond, func(t time.Time) tea.Msg {
+		// return StdoutMsg(m.RenderStdout())
+		// m.output.Flush()
+		// log.Println(m.xoutput.String())
+		return StdoutMsg(m.vm.SB.String())
+	})
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
@@ -157,6 +177,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case MemoryMsg:
 		m.content = msg.content
 		return m, m.UpdateMemory()
+	case StdoutMsg:
+		log.Println(msg)
+		return m, m.UpdateStdout()
 	case EvalMsg:
 		if msg != nil {
 			m.input.Placeholder = msg.Error()
@@ -265,7 +288,7 @@ func (m model) CycleZone() tea.Cmd {
 // render the memory of the repl
 func (m model) RenderStdout() string {
 	x := m.vm.PrintState()
-	y := m.output.String()
+	y := m.vm.SB.String()
 	return fmt.Sprintf("%s\n%s", x, y)
 }
 
@@ -317,6 +340,9 @@ func (m model) View() string {
 
 func main() {
 	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
+
+	f, _ := os.Create("tmp.log")
+	log.SetOutput(f)
 
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)

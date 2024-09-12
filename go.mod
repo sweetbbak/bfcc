@@ -3,6 +3,7 @@ module bfcc
 go 1.23.0
 
 require (
+	github.com/bspaans/jit-compiler v0.0.0-20220428122016-3f1fa26842d2
 	github.com/charmbracelet/bubbles v0.20.0
 	github.com/charmbracelet/bubbletea v1.1.0
 	github.com/charmbracelet/lipgloss v0.13.0

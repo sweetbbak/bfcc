@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"bfcc/pkg/gen/c"
+	"bfcc/pkg/gen/golang"
 	"bfcc/pkg/gen/interp"
 	"bfcc/pkg/repl"
 	"github.com/jessevdk/go-flags"
@@ -38,6 +39,22 @@ func Interp(input string) error {
 	return vm.Generate(input, opts.Output)
 }
 
+func RunGo(input, output string) error {
+	gogen := golang.New(opts.StackSize)
+	err := gogen.Generate(input, output)
+	if err != nil {
+		return err
+	}
+
+	if opts.Run {
+		if err := Execute(opts.Output); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func Run(args []string) error {
 	var input string
 
@@ -59,28 +76,39 @@ func Run(args []string) error {
 		return Interp(string(b))
 	}
 
-	cgen := cgen.New(opts.StackSize)
+	if opts.Backend[0] == 'g' || opts.Backend == "go" {
+		return RunGo(string(b), opts.Output)
+	}
 
+	cgen := cgen.New(opts.StackSize)
 	err = cgen.Generate(string(b), opts.Output)
 	if err != nil {
 		return err
 	}
 
 	if opts.Run {
-		cmdname, err := filepath.Abs(opts.Output)
-		if err != nil {
+		if err := Execute(opts.Output); err != nil {
 			return err
 		}
+	}
 
-		exe := exec.Command(cmdname)
-		exe.Stdin = os.Stdin
-		exe.Stdout = os.Stdout
-		exe.Stderr = os.Stderr
+	return nil
+}
 
-		err = exe.Run()
-		if err != nil {
-			return fmt.Errorf("Error launching %s: %s\n", opts.Output, err)
-		}
+func Execute(path string) error {
+	cmdname, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+
+	exe := exec.Command(cmdname)
+	exe.Stdin = os.Stdin
+	exe.Stdout = os.Stdout
+	exe.Stderr = os.Stderr
+
+	err = exe.Run()
+	if err != nil {
+		return fmt.Errorf("Error launching %s: %s\n", path, err)
 	}
 
 	return nil

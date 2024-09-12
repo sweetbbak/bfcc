@@ -130,7 +130,6 @@ func (v *Interpreter) evaluate() error {
 		}
 
 		v.Memory[v.ptr] = int(buf[0])
-
 	case lexer.LOOP_OPEN:
 		// advance if our loop counter is not 0 (which is when we stop looping)
 		if v.Memory[v.ptr] != 0 {

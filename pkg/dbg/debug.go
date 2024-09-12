@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"bfcc/pkg/lexer"
+
 	"github.com/muesli/reflow/wordwrap"
 )
 
@@ -23,6 +24,7 @@ type Debug struct {
 	Input io.Reader
 	// usually stdout, for writing to
 	Output io.Writer
+	SB     strings.Builder
 	// our position in the tokens
 	offset int
 	// brainfuck pointer
@@ -161,6 +163,7 @@ func (v *Debug) evaluate() error {
 
 	case lexer.OUTPUT:
 		fmt.Fprintf(v.Output, "%c", rune(v.Memory[v.ptr]))
+		v.SB.WriteString(fmt.Sprintf("%c", rune(v.Memory[v.ptr])))
 
 	case lexer.INPUT:
 		buf := make([]byte, 1)
