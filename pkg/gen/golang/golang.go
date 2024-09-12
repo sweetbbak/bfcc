@@ -61,6 +61,10 @@ func main() {
 	}
 	
 	var b int
+	
+	// ignore unused
+	_ = b
+	_ = inputFn
 `
 
 	// add memory size to header
