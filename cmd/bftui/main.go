@@ -49,6 +49,7 @@ type model struct {
 	height  int
 	scroll  int
 	input   textinput.Model
+	fpOpen  bool
 	styles  *Styles
 	view    View // currently focused region
 	vm      *debug.Debug
@@ -89,7 +90,7 @@ func initialModel() model {
 		return nil
 	}
 
-	vm := debug.New(200, true)
+	vm := debug.New(1200, true)
 
 	// emulate stdout
 	// var outbuf *bytes.Buffer
@@ -178,7 +179,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.content = msg.content
 		return m, m.UpdateMemory()
 	case StdoutMsg:
-		log.Println(msg)
 		return m, m.UpdateStdout()
 	case EvalMsg:
 		if msg != nil {
@@ -224,9 +224,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.step.Step <- true
 			}
 		case "enter":
-			v := m.input.Value()
-			if len(v) > len("open") && strings.HasPrefix(v, "open") {
-				files := strings.Split(v, " ")
+			inputVal := m.input.Value()
+			if strings.HasPrefix(inputVal, "open") {
+				files := strings.Split(inputVal, " ")
 				var file string
 				if len(files) > 1 {
 					file = files[1]
@@ -237,30 +237,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				s, err := m.OpenFile(file)
 				if err != nil {
 					// render error out to tui?
-					v = err.Error()
+					inputVal = err.Error()
 				}
 
 				if s != "" {
-					v = s
-				} else {
-					v = "file is empty"
+					inputVal = s
 				}
 
 				m.input.Reset()
-				m.input.SetValue(v)
-				c := tea.Batch(m.UpdateEval(v))
+				m.input.SetValue(inputVal)
+				c := tea.Batch(m.UpdateEval(inputVal))
 				return m, c
 			}
 
 			// only add valid brainfuck to the history
-			m.input.Validate(v)
+			m.input.Validate(inputVal)
 			if m.input.Err == nil {
-				m.history = append(m.history, v)
+				m.history = append(m.history, inputVal)
 				m.input.SetSuggestions(m.history)
 			}
 
 			m.input.Reset()
-			c := tea.Batch(m.UpdateEval(v))
+			c := tea.Batch(m.UpdateEval(inputVal))
 			return m, c
 		case "esc", "escape":
 		}
@@ -340,9 +338,6 @@ func (m model) View() string {
 
 func main() {
 	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
-
-	f, _ := os.Create("tmp.log")
-	log.SetOutput(f)
 
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
