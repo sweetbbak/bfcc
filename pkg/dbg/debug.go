@@ -39,6 +39,8 @@ type Debug struct {
 	rw sync.RWMutex
 	// memory string colorer
 	c Color
+	// testing a token window for printing instructions
+	tokenWindow int
 }
 
 type StepFn func() error
@@ -72,17 +74,72 @@ func (v *Debug) Ptr() int {
 }
 
 // print the current instruction set as a string
-func (v *Debug) PrintState() string {
-	var s string
-	for i, t := range v.Tokens {
+// looks rad af
+func (v *Debug) PrintState(width int) string {
+	// needs to have a 'context' window of N chars or lines
+	// var s string
+	var sb strings.Builder
+	// win := 21
+
+	// tokens are nil until user input
+	if len(v.Tokens) < 1 {
+		return ""
+	}
+
+	// if len(v.Tokens) <= width {
+	// 	for i, t := range v.Tokens {
+	// 		if i == v.offset {
+	// 			// str := fmt.Sprintf("\x1b[48;5;32m%s\x1b[0m", strings.Repeat(t.Type, t.Repeat))
+	// 			str := "\x1b[48;5;32m" + strings.Repeat(t.Type, t.Repeat) + "\x1b[0m"
+	// 			sb.WriteString(str)
+	// 		} else {
+	// 			str := strings.Repeat(t.Type, t.Repeat)
+	// 			sb.WriteString(str)
+	// 		}
+	// 	}
+	// 	return sb.String()
+	// }
+
+	tlen := len(v.Tokens)
+	var (
+		start, end int
+	)
+
+	// 5 tokens before and after offset with bounds checking
+
+	// [1 1 1 1 1 1 ]
+	//  ^
+	x := 15
+
+	if v.offset-x >= 0 {
+		start = v.offset - x
+	} else {
+		start = 0
+	}
+
+	if v.offset+x >= tlen {
+		end = tlen
+	} else {
+		end = v.offset + x
+	}
+
+	var b int
+	for i := start; i < end; i++ {
+		t := v.Tokens[i]
 		if i == v.offset {
-			s = fmt.Sprintf("\x1b[32m%s\x1b[0m", strings.Repeat(t.Type, t.Repeat))
+			// str := fmt.Sprintf("\x1b[48;5;32m%s\x1b[0m", strings.Repeat(t.Type, t.Repeat))
+			str := "\x1b[48;5;32m" + strings.Repeat(t.Type, t.Repeat) + "\x1b[0m"
+			b += len(str)
+			sb.WriteString(str)
 		} else {
-			s = fmt.Sprintf("%s", strings.Repeat(t.Type, t.Repeat))
+			str := strings.Repeat(t.Type, t.Repeat)
+			b += len(str)
+			sb.WriteString(str)
 		}
 	}
 
-	return s
+	str := sb.String()
+	return str
 }
 
 // dump memory as a format "%d" or "%x"
@@ -162,7 +219,7 @@ func (v *Debug) evaluate() error {
 		v.Memory[v.ptr] -= tok.Repeat
 
 	case lexer.OUTPUT:
-		fmt.Fprintf(v.Output, "%c", rune(v.Memory[v.ptr]))
+		// fmt.Fprintf(v.Output, "%c", rune(v.Memory[v.ptr]))
 		v.SB.WriteString(fmt.Sprintf("%c", rune(v.Memory[v.ptr])))
 
 	case lexer.INPUT:

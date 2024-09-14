@@ -1,10 +1,16 @@
 package main
 
+import (
+	"fmt"
+	"strings"
+)
+
 type Memfmt int
 
 const (
 	Hex Memfmt = iota
 	Decimal
+	Char
 )
 
 type MemoryFormat struct {
@@ -18,8 +24,12 @@ func (m *model) CycleMemFormat() {
 		m.memfmt.kind = Hex
 		m.memfmt.literal = "%d"
 	case Hex:
+		// m.memfmt.kind = Char
 		m.memfmt.kind = Decimal
 		m.memfmt.literal = "%x"
+		// case Char:
+		// 	m.memfmt.kind = Decimal
+		// 	m.memfmt.literal = "%c"
 	}
 }
 
@@ -48,4 +58,31 @@ func (s *Stepper) ChangeSpeed(i int) {
 	} else {
 		s.Speed += i
 	}
+}
+
+func HighlightBF(s string) string {
+	var sb strings.Builder
+	for _, ch := range s {
+		switch ch {
+		case '>':
+			sb.WriteString(fmt.Sprintf("\x1b[32m%s\x1b[0m", s))
+		case '<':
+			sb.WriteString(fmt.Sprintf("\x1b[33m%s\x1b[0m", s))
+		case '+':
+			sb.WriteString(fmt.Sprintf("\x1b[34m%s\x1b[0m", s))
+		case '-':
+			sb.WriteString(fmt.Sprintf("\x1b[35m%s\x1b[0m", s))
+		case '[':
+			sb.WriteString(fmt.Sprintf("\x1b[36m%s\x1b[0m", s))
+		case ']':
+			sb.WriteString(fmt.Sprintf("\x1b[36m%s\x1b[0m", s))
+		case ',':
+			sb.WriteString(fmt.Sprintf("\x1b[37m%s\x1b[0m", s))
+		case '.':
+			sb.WriteString(fmt.Sprintf("\x1b[38m%s\x1b[0m", s))
+		default:
+			sb.WriteRune(ch)
+		}
+	}
+	return sb.String()
 }

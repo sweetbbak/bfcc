@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"log"
 	"os"
@@ -20,17 +18,24 @@ type Styles struct {
 	BorderColor lipgloss.Color
 	BorderBlur  lipgloss.Color
 	TextColor   lipgloss.Color
+	TextColor2  lipgloss.Color
 	TextField   lipgloss.Style
+	TextField2  lipgloss.Style
 	TextHelp    lipgloss.Style
 	Border      lipgloss.Border
+	Stdout      lipgloss.Style
 }
 
 func DefaultStyles() *Styles {
 	s := new(Styles)
 	s.BorderColor = lipgloss.Color("36")
-	s.BorderBlur = lipgloss.Color("240")
+	s.BorderBlur = lipgloss.Color("24")
 	s.TextColor = lipgloss.Color("240")
-	s.TextField = lipgloss.NewStyle().BorderForeground(s.BorderColor).BorderStyle(lipgloss.RoundedBorder()).Foreground(s.TextColor)
+	// s.TextColor = lipgloss.Color("24")
+	s.TextColor2 = lipgloss.Color("33")
+	s.TextField = lipgloss.NewStyle().BorderForeground(s.BorderColor).BorderStyle(lipgloss.DoubleBorder()).Foreground(s.TextColor)
+	// s.TextField = lipgloss.NewStyle().BorderForeground(lipgloss.Color("69")).BorderStyle(lipgloss.DoubleBorder()).Foreground(s.TextColor2)
+	s.Stdout = lipgloss.NewStyle().BorderForeground(s.BorderColor).BorderStyle(lipgloss.RoundedBorder())
 	s.TextHelp = lipgloss.NewStyle().Foreground(s.TextColor)
 	s.Border = lipgloss.RoundedBorder()
 	return s
@@ -45,20 +50,19 @@ const (
 )
 
 type model struct {
-	width   int
-	height  int
-	scroll  int
-	input   textinput.Model
-	fpOpen  bool
-	styles  *Styles
-	view    View // currently focused region
-	vm      *debug.Debug
-	memfmt  MemoryFormat // hex, octal, decimal memory layout
-	content string       // memory content
-	step    *Stepper
-	history []string
-	xoutput *bytes.Buffer
-	output  *bufio.Writer
+	width        int
+	height       int
+	scroll       int
+	input        textinput.Model
+	fpOpen       bool
+	styles       *Styles
+	view         View // currently focused region
+	vm           *debug.Debug
+	memfmt       MemoryFormat // hex, octal, decimal memory layout
+	content      string       // memory content
+	step         *Stepper
+	history      []string
+	stdoutHeight int
 }
 
 func initialModel() model {
@@ -162,10 +166,15 @@ type StdoutMsg string
 
 func (m model) UpdateStdout() tea.Cmd {
 	return tea.Tick(time.Microsecond, func(t time.Time) tea.Msg {
-		// return StdoutMsg(m.RenderStdout())
-		// m.output.Flush()
-		// log.Println(m.xoutput.String())
-		return StdoutMsg(m.vm.SB.String())
+		return StdoutMsg(m.RenderStdout(m.width-3, m.stdoutHeight))
+	})
+}
+
+type InstrMsg string
+
+func (m model) UpdateBuffer() tea.Cmd {
+	return tea.Tick(time.Microsecond, func(t time.Time) tea.Msg {
+		return InstrMsg(m.RenderStdout(m.width-3, m.stdoutHeight))
 	})
 }
 
@@ -284,10 +293,39 @@ func (m model) CycleZone() tea.Cmd {
 }
 
 // render the memory of the repl
-func (m model) RenderStdout() string {
-	x := m.vm.PrintState()
-	y := m.vm.SB.String()
-	return fmt.Sprintf("%s\n%s", x, y)
+func (m model) RenderStdout(maxwidth, height int) string {
+	s := m.vm.SB.String()
+	if s == "" {
+		return ""
+	}
+
+	splits := strings.Split(s, "\n") // naive and slow probably
+
+	for i, line := range splits {
+		if len(line) > maxwidth {
+			splits[i] = line[:maxwidth]
+		}
+	}
+
+	if len(splits) < height {
+		return s
+	}
+
+	lastN := splits[len(splits)-height:]
+	return strings.Join(lastN, "\n")
+}
+
+// render the memory of the repl
+func (m model) RenderState() string {
+	s := m.vm.PrintState((m.width - 3) / 2)
+
+	splits := strings.Split(s, "\n") // naive and slow probably
+	if len(splits) < 5 {
+		return s
+	}
+
+	lastFive := splits[len(splits)-5:]
+	return strings.Join(lastFive, "\n")
 }
 
 // render the memory of the repl
@@ -303,7 +341,7 @@ func (m model) RenderStatus() string {
 		s += "paused"
 	}
 
-	s += " ctrl+j speed++ | ctrl+k speed--"
+	s += " ctrl+j speed++ | ctrl+k speed-- | reset | ctrl+a format | open <file>"
 
 	return m.styles.TextHelp.Render(s)
 }
@@ -313,24 +351,45 @@ func (m model) View() string {
 		return "loading..."
 	}
 
+	// input field
 	answer := m.styles.TextField.
 		Width(m.width - 2).
 		Render(m.input.View())
 
-	// outbuf := m.styles.TextField.Render(m.RenderStdout())
-	outbuf := m.RenderStdout()
+	// help
 	footer := m.RenderStatus()
-	mheight := m.height - lipgloss.Height(answer) - 2 - lipgloss.Height(footer) - lipgloss.Height(outbuf)
 
+	// instructions set
+	outbuf := m.RenderState()
+	outbuf = m.styles.Stdout.
+		Width(m.width - 2).
+		Height(2). // overflow
+		Render(outbuf)
+
+	// why -5 lmao is it the border again? Im guessing yes as its not necessarily accounted for ughh
+	sheight := (m.height - lipgloss.Height(answer) - 5 - lipgloss.Height(footer) - lipgloss.Height(outbuf)) / 2
+	m.stdoutHeight = sheight
+
+	// emulated stdout
+	stdout := m.RenderStdout(m.width-3, sheight)
+	stdout = m.styles.Stdout.
+		Width(m.width - 2).
+		Height(sheight).
+		Render(stdout)
+
+	// mheight := m.height - lipgloss.Height(answer) - 2 - lipgloss.Height(footer) - lipgloss.Height(outbuf) - lipgloss.Height(stdout)
+
+	// memory
 	content := m.styles.TextField.
 		Width(m.width - 2).
-		Height(mheight).
+		Height(sheight - 1).
 		Render(m.content)
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		answer,
 		content,
+		stdout,
 		outbuf,
 		footer,
 	)
@@ -338,7 +397,6 @@ func (m model) View() string {
 
 func main() {
 	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
-
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}
