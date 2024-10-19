@@ -17,6 +17,18 @@ const (
 	LOOP_CLOSE = "]"
 )
 
+var TokenTypes = [...]string{
+	EOF,
+	DEC_PTR,
+	INC_PTR,
+	INC_CELL,
+	DEC_CELL,
+	OUTPUT,
+	INPUT,
+	LOOP_OPEN,
+	LOOP_CLOSE,
+}
+
 type Token struct {
 	// "<" "+" etc...
 	Type string
@@ -46,49 +58,38 @@ func New(input string) *Lexer {
 	l.input = strings.ReplaceAll(l.input, "\r", "")
 	l.input = strings.ReplaceAll(l.input, " ", "")
 
-	// register our known tokens
-	l.known = make(map[string]string)
-	l.known["+"] = INC_CELL
-	l.known["-"] = DEC_CELL
-	l.known[">"] = INC_PTR
-	l.known["<"] = DEC_PTR
-	l.known[","] = INPUT
-	l.known["."] = OUTPUT
-	l.known["["] = LOOP_OPEN
-	l.known["]"] = LOOP_CLOSE
+	l.registerKnowTokens()
 
+	l.handleCharRepetition()
+
+	return l
+}
+
+func (l *Lexer) registerKnowTokens() {
+	l.known = make(map[string]string)
+
+	for _, tt := range TokenTypes[1:] {
+		l.known[tt] = tt
+	}
+}
+
+func (l *Lexer) handleCharRepetition() {
 	// Some characters will have their input collapsed
 	// when multiple consecutive occurrences are found.
 	l.repeat = make(map[string]bool)
-	l.repeat["+"] = true
-	l.repeat["-"] = true
-	l.repeat[">"] = true
-	l.repeat["<"] = true
 
-	return l
+	// TokenTypes[1:5] == [ <, >, +, - ]
+	for _, tt := range TokenTypes[1:5] {
+		l.repeat[tt] = true
+	}
 }
 
 func Repl() *Lexer {
 	l := &Lexer{}
 
-	// register our known tokens
-	l.known = make(map[string]string)
-	l.known["+"] = INC_CELL
-	l.known["-"] = DEC_CELL
-	l.known[">"] = INC_PTR
-	l.known["<"] = DEC_PTR
-	l.known[","] = INPUT
-	l.known["."] = OUTPUT
-	l.known["["] = LOOP_OPEN
-	l.known["]"] = LOOP_CLOSE
+	l.registerKnowTokens()
 
-	// Some characters will have their input collapsed
-	// when multiple consecutive occurrences are found.
-	l.repeat = make(map[string]bool)
-	l.repeat["+"] = true
-	l.repeat["-"] = true
-	l.repeat[">"] = true
-	l.repeat["<"] = true
+	l.handleCharRepetition()
 
 	return l
 }
